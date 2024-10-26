@@ -333,6 +333,7 @@ private:
                      const std::string& date, const std::string& timestamp,
                      const std::string& expiry, const std::string& body) {
 
+#if 0
         std::cout << "Binding values:\n"
                   << "1. GUID: " << guid << "\n"
                   << "2. Type: " << type << "\n"
@@ -340,7 +341,9 @@ private:
                   << "4. Timestamp: " << timestamp << "\n"
                   << "5. Expiry: " << expiry << "\n"
                   << "6. Body length: " << body.length() << "\n";
-            int rc;
+#endif
+
+        int rc = SQLITE_ERROR;
 
         // Begin a nested transaction for this record
         char* err_msg = nullptr;

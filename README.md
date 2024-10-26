@@ -15,6 +15,8 @@ This utility processes trade data from CSV files and stores them in a SQLite dat
 - Transaction support for data integrity
 - Support for large datasets through efficient batch processing
 - Robust error handling and validation
+- Optional sandboxed execution with resource monitoring
+
 
 ## Prerequisites
 
@@ -77,6 +79,37 @@ Example:
 ```bash
 csv_to_sqlite --type TSLA --date 20241016 --input trades.csv
 ```
+
+### Sandboxed Execution
+For enhanced security and resource monitoring, use the runner:
+```bash
+runner --input <input_file> --output <output_file> --log <log_file> -- csv_to_sqlite --type <type> --date <date>
+```
+
+Required arguments for runner:
+- `--input`: Input file to be processed
+- `--output`: File to store the processing output
+- `--log`: File to store error logs and resource usage
+- `--`: Separator for executable and its arguments
+- Followed by csv_to_sqlite arguments as described above
+
+Example sandboxed execution:
+```bash
+runner --input trades.csv --output result.db --log process.log -- csv_to_sqlite --type TSLA --date 20241016
+```
+
+The runner provides:
+- Process isolation
+- Resource usage monitoring (CPU time, memory usage)
+- Error logging with timestamps
+- Controlled input/output handling
+
+### Resource Monitoring
+The runner outputs resource usage statistics after execution:
+- User CPU time
+- System CPU time
+- Maximum resident set size (memory usage)
+
 
 ## Input File Format
 
