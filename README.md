@@ -1,27 +1,25 @@
-# CSV to SQLite Converter
+# Sandbox Runner
 
-A command-line utility that converts CSV trade data into a SQLite database with an immutable record design pattern.
+A secure process isolation and resource monitoring utility designed to run executables in a controlled environment with input/output redirection and resource usage tracking.
 
 ## Overview
 
-This utility processes trade data from CSV files and stores them in a SQLite database. Each record is stored with a unique GUID and includes trade-specific information such as timestamp, type, expiry date, and additional trade details in a JSON format.
+The Sandbox Runner provides a secure execution environment for command-line applications, offering process isolation, resource monitoring, and detailed logging capabilities. It's particularly useful for running data processing applications that need controlled access to system resources.
 
 ## Features
 
-- CSV parsing with support for both comma and tab delimiters
-- Automatic delimiter detection
-- Immutable record storage with GUID
-- JSON serialization of trade data
-- Transaction support for data integrity
-- Support for large datasets through efficient batch processing
-- Robust error handling and validation
-- Optional sandboxed execution with resource monitoring
-
+- Process isolation through forking
+- Input/Output redirection
+- Resource usage monitoring (CPU, memory)
+- Error logging with timestamps
+- Pipe-based I/O handling
+- Child process resource tracking
+- Detailed execution statistics
 
 ## Prerequisites
 
-- C++20 or later
-- SQLite3 development libraries
+- POSIX-compliant operating system (Linux/Unix)
+- C++20 compiler
 - CMake 3.15 or later
 
 ### Installation of Dependencies
@@ -29,18 +27,18 @@ This utility processes trade data from CSV files and stores them in a SQLite dat
 For Ubuntu/Debian:
 ```bash
 sudo apt-get update
-sudo apt-get install build-essential cmake libsqlite3-dev
+sudo apt-get install build-essential cmake
 ```
 
 For CentOS/RHEL:
 ```bash
 sudo yum groupinstall "Development Tools"
-sudo yum install cmake sqlite-devel
+sudo yum install cmake
 ```
 
 For macOS:
 ```bash
-brew install cmake sqlite3
+brew install cmake
 ```
 
 ## Building
@@ -48,7 +46,7 @@ brew install cmake sqlite3
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd csv-to-sqlite
+cd Sandboxer
 ```
 
 2. Create build directory:
@@ -67,100 +65,123 @@ make
 
 Basic command format:
 ```bash
-csv_to_sqlite --type <type> --date <YYYYMMDD> --input <input_file>
+runner --input <input_file> --output <output_file> --log <log_file> -- <executable> [args...]
 ```
 
 Required arguments:
-- `--type`: Specify the type for processing (e.g., TSLA)
-- `--date`: Specify the date in YYYYMMDD format (e.g., 20241016)
-- `--input`: Input CSV file path
+- `--input`: Input file to be sent to the executable
+- `--output`: File to store the executable's output
+- `--log`: File to store error logs and resource usage
+- `--`: Separator for executable and its arguments
+- `<executable>`: The program to run in the sandbox
+- `[args...]`: Optional arguments for the executable
 
 Example:
 ```bash
-csv_to_sqlite --type TSLA --date 20241016 --input trades.csv
+runner --input data.csv --output result.txt --log process.log -- ./processor --verbose
 ```
 
-### Sandboxed Execution
-For enhanced security and resource monitoring, use the runner:
-```bash
-runner --input <input_file> --output <output_file> --log <log_file> -- csv_to_sqlite --type <type> --date <date>
-```
+## Resource Monitoring
 
-Required arguments for runner:
-- `--input`: Input file to be processed
-- `--output`: File to store the processing output
-- `--log`: File to store error logs and resource usage
-- `--`: Separator for executable and its arguments
-- Followed by csv_to_sqlite arguments as described above
-
-Example sandboxed execution:
-```bash
-runner --input trades.csv --output result.db --log process.log -- csv_to_sqlite --type TSLA --date 20241016
-```
-
-The runner provides:
-- Process isolation
-- Resource usage monitoring (CPU time, memory usage)
-- Error logging with timestamps
-- Controlled input/output handling
-
-### Resource Monitoring
-The runner outputs resource usage statistics after execution:
+The runner tracks and reports:
 - User CPU time
 - System CPU time
 - Maximum resident set size (memory usage)
+- Process execution time
+- I/O statistics
 
-
-## Input File Format
-
-The CSV file should contain headers and can use either comma or tab as delimiter. Example format:
+Example output:
 ```
-Time,Root,Expiry,Type,Strike,Qty,Price,Notional,Bid,Ask,Side,Volatility,Change,Delta,Open Interest,Exchange,Condition,Execution,Description,Hedge Price
-09:30:00.0040000,TSLA,21-Feb-25,P,140,1,2.40,240,0.00,0.00,Other,59.1,0.0024,-0.0619,1068,PHLX,AutoExecution,,,221.46
-```
-
-## Database Schema
-
-The SQLite database creates a table with the following schema:
-
-```sql
-CREATE TABLE nodes (
-    guid TEXT PRIMARY KEY,
-    type TEXT NOT NULL,
-    date TEXT NOT NULL,
-    timestamp TEXT NOT NULL,
-    expiry TEXT NOT NULL,
-    body TEXT NOT NULL
-);
+Execution Statistics:
+User CPU Time: 0.234s
+System CPU Time: 0.056s
+Max RSS: 24576 KB
 ```
 
-Where:
-- `guid`: Unique identifier for each record
-- `type`: Trade type (e.g., TSLA)
-- `date`: Processing date
-- `timestamp`: Trade timestamp
-- `expiry`: Option expiry date
-- `body`: JSON string containing all trade data
+## Security Features
+
+1. Process Isolation:
+   - Separate process space
+   - Controlled resource access
+   - I/O redirection
+
+2. Resource Control:
+   - Memory usage monitoring
+   - CPU time tracking
+   - Process termination handling
 
 ## Error Handling
 
-The program includes comprehensive error handling for:
-- File I/O errors
-- Malformed CSV data
-- Database operations
-- Invalid command-line arguments
+Errors are logged with timestamps in the specified log file:
+```
+[2024-10-16 09:30:00] Process started
+[2024-10-16 09:30:01] Error: Unable to open input file
+[2024-10-16 09:30:01] Process terminated
+```
 
-Errors are logged to stderr with descriptive messages.
+## Implementation Details
 
-## Performance
+### Key Components
 
-The utility uses SQLite transactions for optimal insertion performance. Large files are processed in batches to maintain memory efficiency.
+1. Argument Parser (`args.h`, `args.cpp`):
+   - Parses command-line arguments
+   - Validates required parameters
+   - Handles executable arguments
 
-## Limitations
+2. Logger (`log.h`):
+   - Timestamp-based logging
+   - Error message formatting
+   - File-based logging
 
-- Records are immutable; no update operations are supported
-- All data is stored in a single SQLite database file
-- The program assumes a specific CSV format with required columns
+3. Application Runner (`app.h`, `app.cpp`):
+   - Process forking
+   - Pipe creation
+   - I/O redirection
+   - Resource monitoring
+
+4. Result Handler (`result.h`):
+   - Statistics collection
+   - Resource usage reporting
+
+## Examples
+
+1. Basic execution:
+```bash
+runner --input input.txt --output output.txt --log errors.log -- ./myapp --arg1 value1
+```
+
+2. Processing with resource limits:
+```bash
+# Set ulimit before running
+ulimit -v 1000000  # Set virtual memory limit
+runner --input big_data.csv --output results.txt --log process.log -- ./processor
+```
+
+3. Error handling demonstration:
+```bash
+runner --input nonexistent.txt --output out.txt --log errors.log -- ./app
+# Check errors.log for detailed error information
+```
+
+## Troubleshooting
+
+Common issues and solutions:
+
+1. Permission errors:
+```bash
+chmod +x runner
+chmod +x <executable>
+```
+
+2. Pipe errors:
+   - Check system ulimit settings
+   - Verify file permissions
+   - Check available file descriptors
+
+3. Resource limits:
+   - Monitor process.log
+   - Check system resources
+   - Adjust ulimit settings
 
 ## Contributing
 
@@ -173,3 +194,4 @@ The utility uses SQLite transactions for optimal insertion performance. Large fi
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
