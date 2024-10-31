@@ -7,6 +7,7 @@
 
 #include "args.h"
 #include <iostream>
+#include <sstream>
 
 Args::Args(int argc, char* argv[]) : argc(argc), argv(argv) {
     parse();
@@ -14,26 +15,48 @@ Args::Args(int argc, char* argv[]) : argc(argc), argv(argv) {
 
 void Args::printUsage() {
     std::cout << "Usage: sanbox --input <input_file> --output <output_file> --log <log_file> -- <executable> [args...]\n";
-    std::cout << "  --input  <input_file>   : Input file to be sent to the executable\n";
-    std::cout << "  --output <output_file>  : File to store the executable's output\n";
-    std::cout << "  --log    <log_file>     : File to store error logs\n";
-    std::cout << "  --                      : Separator for executable and its arguments\n";
-    std::cout << "  <executable>            : The executable to run in the sandbox\n";
-    std::cout << "  [args...]               : Optional arguments for the executable\n";
+    std::cout << "  --input  <file>:<type>:<date>   : Input file to be sent to the executable\n";
+    std::cout << "  --output <output_file>          : File to store the executable's output\n";
+    std::cout << "  --log    <log_file>             : File to store error logs\n";
+    std::cout << "  --                              : Separator for executable and its arguments\n";
+    std::cout << "  <executable>                    : The executable to run in the sandbox\n";
+    std::cout << "  [args...]                       : Optional arguments for the executable\n";
 }
 
+void Args::parseInputFormat(const std::string& input) {
+    std::stringstream ss(input);
+    std::string token;
+    std::vector<std::string> parts;
+
+    while (std::getline(ss, token, ':')) {
+        parts.push_back(token);
+    }
+
+    if (parts.size() != 3) {
+        throw std::runtime_error("Error: Input format must be 'file:type:date'");
+    }
+
+    inputFileName = parts[0];
+
+    executableArgs.push_back("--input");
+    executableArgs.push_back(parts[0]);
+    executableArgs.push_back("--type");
+    executableArgs.push_back(parts[1]);
+    executableArgs.push_back("--date");
+    executableArgs.push_back(parts[2]);
+}
+
+// In runner's args.cpp
 void Args::parse() {
     bool execArgsStart = false;
-
     for (int i = 1; i < argc; ++i) {
         std::string arg(argv[i]);
-
         if (!execArgsStart) {
             if (arg == "--input") {
                 if (i + 1 < argc) {
-                    inputFileName = argv[++i];
+                    parseInputFormat(argv[++i]);
                 } else {
-                    throw std::runtime_error("Error: Missing input file name after --input");
+                    throw std::runtime_error("Error: Missing value after --input");
                 }
             } else if (arg == "--output") {
                 if (i + 1 < argc) {
@@ -60,7 +83,6 @@ void Args::parse() {
             }
         }
     }
-
     if (inputFileName.empty() || outputFileName.empty() || logFileName.empty() || executableName.empty()) {
         throw std::runtime_error("Error: Missing required arguments");
     }

@@ -78,7 +78,7 @@ Required arguments:
 
 Example:
 ```bash
-runner --input data.csv --output result.txt --log process.log -- ./processor --verbose
+runner --input trades.csv:TSLA:20241016 --output result.txt --log process.log -- ./processor --verbose
 ```
 
 ## Resource Monitoring

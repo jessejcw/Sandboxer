@@ -17,17 +17,6 @@
 App::App(const Args& args, Log& log) : args(args), log(log) {}
 
 void App::run() {
-    // Read input file
-    std::ifstream inputFile(args.inputFileName);
-    if (!inputFile.is_open()) {
-        std::cerr << "Error: Cannot open input file\n";
-        exit(1);
-    }
-    std::stringstream inputBuffer;
-    inputBuffer << inputFile.rdbuf();
-    inputFile.close();
-    std::string inputData = inputBuffer.str();
-
     // Open output file
     std::ofstream outputFile(args.outputFileName);
     if (!outputFile.is_open()) {
@@ -35,12 +24,11 @@ void App::run() {
         exit(1);
     }
 
-    // Create pipes
-    int stdin_pipe[2];
+    // Create pipes for stdout and stderr
     int stdout_pipe[2];
     int stderr_pipe[2];
 
-    if (pipe(stdin_pipe) != 0 || pipe(stdout_pipe) != 0 || pipe(stderr_pipe) != 0) {
+    if (pipe(stdout_pipe) != 0 || pipe(stderr_pipe) != 0) {
         std::cerr << "Error: Pipe creation failed\n";
         exit(1);
     }
@@ -51,11 +39,6 @@ void App::run() {
         exit(1);
     } else if (pid == 0) {
         // Child process
-        // Redirect stdin
-        dup2(stdin_pipe[0], STDIN_FILENO);
-        close(stdin_pipe[0]);
-        close(stdin_pipe[1]);
-
         // Redirect stdout
         dup2(stdout_pipe[1], STDOUT_FILENO);
         close(stdout_pipe[0]);
@@ -65,6 +48,13 @@ void App::run() {
         dup2(stderr_pipe[1], STDERR_FILENO);
         close(stderr_pipe[0]);
         close(stderr_pipe[1]);
+
+        // Close unnecessary file descriptors
+        // Close stdin if you want to prevent child from reading from it
+        // Alternatively, you can redirect stdin to /dev/null
+        int devnull = open("/dev/null", O_RDONLY);
+        dup2(devnull, STDIN_FILENO);
+        close(devnull);
 
         // Prepare arguments for execvp
         std::vector<char*> execArgs;
@@ -81,36 +71,64 @@ void App::run() {
         }
     } else {
         // Parent process
-        close(stdin_pipe[0]);  // Close unused read end
         close(stdout_pipe[1]); // Close unused write end
         close(stderr_pipe[1]); // Close unused write end
 
-        // Write input to child's stdin
-        write(stdin_pipe[1], inputData.c_str(), inputData.size());
-        close(stdin_pipe[1]); // Close write end after sending input
-
-        // Read from child's stdout
+        // Read from child's stdout and stderr concurrently
         char buffer[4096];
-        ssize_t nbytes;
+        bool stdout_eof = false;
+        bool stderr_eof = false;
 
-        while ((nbytes = read(stdout_pipe[0], buffer, sizeof(buffer))) > 0) {
-            std::string data(buffer, nbytes);
-            // Replace commas with tabs
-            for (char& c : data) {
-                if (c == ',') c = '\t';
+        fd_set readfds;
+        int maxfd = std::max(stdout_pipe[0], stderr_pipe[0]) + 1;
+
+        while (!stdout_eof || !stderr_eof) {
+            FD_ZERO(&readfds);
+            if (!stdout_eof)
+                FD_SET(stdout_pipe[0], &readfds);
+            if (!stderr_eof)
+                FD_SET(stderr_pipe[0], &readfds);
+
+            int ret = select(maxfd, &readfds, NULL, NULL, NULL);
+            if (ret == -1) {
+                perror("select");
+                exit(1);
             }
-            outputFile << data;
+
+            if (FD_ISSET(stdout_pipe[0], &readfds)) {
+                ssize_t nbytes = read(stdout_pipe[0], buffer, sizeof(buffer));
+                if (nbytes > 0) {
+                    std::string data(buffer, nbytes);
+                    // Replace commas with tabs
+                    for (char& c : data) {
+                        if (c == ',') c = '\t';
+                    }
+                    outputFile << data;
+                } else if (nbytes == 0) {
+                    stdout_eof = true;
+                } else {
+                    perror("read stdout");
+                    exit(1);
+                }
+            }
+
+            if (FD_ISSET(stderr_pipe[0], &readfds)) {
+                ssize_t nbytes = read(stderr_pipe[0], buffer, sizeof(buffer));
+                if (nbytes > 0) {
+                    std::string data(buffer, nbytes);
+                    // Time-tagged error messages
+                    log.LOGE(data);
+                } else if (nbytes == 0) {
+                    stderr_eof = true;
+                } else {
+                    perror("read stderr");
+                    exit(1);
+                }
+            }
         }
         close(stdout_pipe[0]);
-        outputFile.close();
-
-        // Read from child's stderr
-        while ((nbytes = read(stderr_pipe[0], buffer, sizeof(buffer))) > 0) {
-            std::string data(buffer, nbytes);
-            // Time-tagged error messages
-            log.LOGE(data);
-        }
         close(stderr_pipe[0]);
+        outputFile.close();
 
         // Wait for child process to finish and collect resource usage
         int status;

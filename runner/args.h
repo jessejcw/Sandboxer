@@ -24,6 +24,8 @@ private:
     char** argv;
 
     void parse();
+
+    void parseInputFormat(const std::string &input);
 };
 
 #endif //ARGS_H
